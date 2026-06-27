@@ -4,30 +4,16 @@ import { isAdminAuthenticated } from '@/lib/server/auth'
 import { isBlobStorageEnabled } from '@/lib/server/blob-storage'
 import { requireAdmin } from '@/lib/server/guard'
 import {
-  IMAGE_MIME_TYPES,
-  MAX_IMAGE_BYTES,
-  MAX_VIDEO_BYTES,
-  VIDEO_MIME_TYPES,
   saveUploadedFile,
   type UploadKind,
 } from '@/lib/server/upload'
 
 export const maxDuration = 60
 
-function parseUploadKind(clientPayload: string | null | undefined): UploadKind {
-  if (!clientPayload) return 'image'
-  try {
-    const parsed = JSON.parse(clientPayload) as { kind?: UploadKind }
-    return parsed.kind === 'video' ? 'video' : 'image'
-  } catch {
-    return clientPayload === 'video' ? 'video' : 'image'
-  }
-}
-
-async function handleBlobClientUpload(request: Request) {
+async function handleBlobClientUpload(request: Request): Promise<NextResponse> {
   const body = (await request.json()) as HandleUploadBody
 
-  await handleUpload({
+  const jsonResponse = await handleUpload({
     body,
     request,
     onBeforeGenerateToken: async (_pathname, _clientPayload, _multipart) => {
@@ -47,9 +33,11 @@ async function handleBlobClientUpload(request: Request) {
       console.log('upload completed')
     },
   })
+
+  return NextResponse.json(jsonResponse)
 }
 
-async function handleLocalFormUpload(request: Request) {
+async function handleLocalFormUpload(request: Request): Promise<NextResponse> {
   if (process.env.VERCEL && !isBlobStorageEnabled()) {
     return NextResponse.json(
       {
@@ -105,7 +93,7 @@ export async function POST(request: Request) {
     return await handleLocalFormUpload(request)
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : 'Erreur lors de l’upload.'
+      error instanceof Error ? error.message : "Erreur lors de l'upload."
     const status = message === 'Authentification requise' ? 401 : 400
     return NextResponse.json({ error: message }, { status })
   }
