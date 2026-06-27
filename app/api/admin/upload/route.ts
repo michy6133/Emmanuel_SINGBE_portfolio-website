@@ -1,6 +1,6 @@
 import { handleUpload, type HandleUploadBody } from '@vercel/blob/client'
 import { NextResponse } from 'next/server'
-import { isAdminAuthenticated } from '@/lib/server/auth'
+import { isAdminAuthenticated, createUploadToken, verifyUploadToken } from '@/lib/server/auth'
 import { isBlobStorageEnabled } from '@/lib/server/blob-storage'
 import { requireAdmin } from '@/lib/server/guard'
 import {
@@ -24,6 +24,18 @@ function parseUploadKind(clientPayload: string | null | undefined): UploadKind {
   }
 }
 
+async function isUploadAuthorized(request: Request): Promise<boolean> {
+  const ok = await isAdminAuthenticated()
+  if (ok) return true
+
+  const url = new URL(request.url)
+  const token = url.searchParams.get('token') || request.headers.get('x-upload-token')
+  if (token) {
+    return verifyUploadToken(token)
+  }
+  return false
+}
+
 async function handleBlobClientUpload(request: Request) {
   const body = (await request.json()) as HandleUploadBody
 
@@ -32,7 +44,7 @@ async function handleBlobClientUpload(request: Request) {
     request,
 
     onBeforeGenerateToken: async (_pathname, clientPayload) => {
-      const ok = await isAdminAuthenticated()
+      const ok = await isUploadAuthorized(request)
       if (!ok) {
         throw new Error('Authentification requise')
       }
@@ -98,14 +110,23 @@ async function handleLocalFormUpload(request: Request) {
 }
 
 export async function GET() {
+  const ok = await isAdminAuthenticated()
+  if (!ok) {
+    return NextResponse.json({ error: 'Authentification requise' }, { status: 401 })
+  }
+
+  const token = createUploadToken()
   return NextResponse.json({
     mode: isBlobStorageEnabled() || process.env.VERCEL ? 'blob' : 'local',
+    token,
   })
 }
 
 export async function POST(request: Request) {
-  const denied = await requireAdmin()
-  if (denied) return denied
+  const authorized = await isUploadAuthorized(request)
+  if (!authorized) {
+    return NextResponse.json({ error: 'Authentification requise' }, { status: 401 })
+  }
 
   const contentType = request.headers.get('content-type') ?? ''
 
@@ -125,6 +146,7 @@ export async function POST(request: Request) {
 
     return await handleLocalFormUpload(request)
   } catch (error) {
+    console.error('Error in POST /api/admin/upload:', error)
     const message =
       error instanceof Error ? error.message : 'Erreur lors de l’upload.'
     const status = message === 'Authentification requise' ? 401 : 400
