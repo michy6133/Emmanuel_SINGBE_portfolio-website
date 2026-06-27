@@ -30,6 +30,7 @@ async function handleBlobClientUpload(request: Request) {
   const jsonResponse = await handleUpload({
     body,
     request,
+
     onBeforeGenerateToken: async (_pathname, clientPayload) => {
       const ok = await isAdminAuthenticated()
       if (!ok) {
@@ -40,11 +41,29 @@ async function handleBlobClientUpload(request: Request) {
 
       return {
         allowedContentTypes:
-          kind === 'image' ? [...IMAGE_MIME_TYPES] : [...VIDEO_MIME_TYPES],
-        maximumSizeInBytes: kind === 'image' ? MAX_IMAGE_BYTES : MAX_VIDEO_BYTES,
+          kind === 'image'
+            ? [...IMAGE_MIME_TYPES]
+            : [...VIDEO_MIME_TYPES],
+        maximumSizeInBytes:
+          kind === 'image' ? MAX_IMAGE_BYTES : MAX_VIDEO_BYTES,
         addRandomSuffix: true,
         tokenPayload: JSON.stringify({ kind }),
       }
+    },
+
+    onUploadCompleted: async ({ blob, tokenPayload }) => {
+      // Optionnel : logs ou persistance en base
+      const parsed = tokenPayload ? JSON.parse(tokenPayload) : null
+
+      console.log('Upload terminé:', {
+        blob,
+        kind: parsed?.kind,
+      })
+
+      // Ici tu peux ajouter :
+      // - insertion DB
+      // - update utilisateur
+      // - notification
     },
   })
 
