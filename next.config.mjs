@@ -2,6 +2,13 @@
 const nextConfig = {
   images: {
     unoptimized: true,
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '*.public.blob.vercel-storage.com',
+        pathname: '/**',
+      },
+    ],
   },
   async redirects() {
     return [

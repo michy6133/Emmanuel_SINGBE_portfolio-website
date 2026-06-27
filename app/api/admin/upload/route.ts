@@ -1,28 +1,114 @@
+import { handleUpload, type HandleUploadBody } from '@vercel/blob/client'
 import { NextResponse } from 'next/server'
+import { isAdminAuthenticated } from '@/lib/server/auth'
+import { isBlobStorageEnabled } from '@/lib/server/blob-storage'
 import { requireAdmin } from '@/lib/server/guard'
-import { saveUploadedFile, type UploadKind } from '@/lib/server/upload'
+import {
+  IMAGE_MIME_TYPES,
+  MAX_IMAGE_BYTES,
+  MAX_VIDEO_BYTES,
+  VIDEO_MIME_TYPES,
+  saveUploadedFile,
+  type UploadKind,
+} from '@/lib/server/upload'
+
+export const maxDuration = 60
+
+function parseUploadKind(clientPayload: string | null | undefined): UploadKind {
+  if (!clientPayload) return 'image'
+  try {
+    const parsed = JSON.parse(clientPayload) as { kind?: UploadKind }
+    return parsed.kind === 'video' ? 'video' : 'image'
+  } catch {
+    return clientPayload === 'video' ? 'video' : 'image'
+  }
+}
+
+async function handleBlobClientUpload(request: Request) {
+  const body = (await request.json()) as HandleUploadBody
+
+  const jsonResponse = await handleUpload({
+    body,
+    request,
+    onBeforeGenerateToken: async (_pathname, clientPayload) => {
+      const ok = await isAdminAuthenticated()
+      if (!ok) {
+        throw new Error('Authentification requise')
+      }
+
+      const kind = parseUploadKind(clientPayload)
+
+      return {
+        allowedContentTypes:
+          kind === 'image' ? [...IMAGE_MIME_TYPES] : [...VIDEO_MIME_TYPES],
+        maximumSizeInBytes: kind === 'image' ? MAX_IMAGE_BYTES : MAX_VIDEO_BYTES,
+        addRandomSuffix: true,
+        tokenPayload: JSON.stringify({ kind }),
+      }
+    },
+  })
+
+  return NextResponse.json(jsonResponse)
+}
+
+async function handleLocalFormUpload(request: Request) {
+  if (process.env.VERCEL && !isBlobStorageEnabled()) {
+    return NextResponse.json(
+      {
+        error:
+          'Upload impossible sur Vercel sans Blob Store. Créez-en un dans Storage → Blob puis redéployez.',
+      },
+      { status: 503 },
+    )
+  }
+
+  const formData = await request.formData()
+  const file = formData.get('file')
+  const kind = (formData.get('kind') as UploadKind) || 'image'
+
+  if (!(file instanceof File) || file.size === 0) {
+    return NextResponse.json({ error: 'Aucun fichier reçu.' }, { status: 400 })
+  }
+
+  if (kind !== 'image' && kind !== 'video') {
+    return NextResponse.json({ error: 'Type de média invalide.' }, { status: 400 })
+  }
+
+  const result = await saveUploadedFile(file, kind)
+  return NextResponse.json({ success: true, url: result.url, filename: result.filename })
+}
+
+export async function GET() {
+  return NextResponse.json({
+    mode: isBlobStorageEnabled() || process.env.VERCEL ? 'blob' : 'local',
+  })
+}
 
 export async function POST(request: Request) {
   const denied = await requireAdmin()
   if (denied) return denied
 
+  const contentType = request.headers.get('content-type') ?? ''
+
   try {
-    const formData = await request.formData()
-    const file = formData.get('file')
-    const kind = (formData.get('kind') as UploadKind) || 'image'
-
-    if (!(file instanceof File) || file.size === 0) {
-      return NextResponse.json({ error: 'Aucun fichier reçu.' }, { status: 400 })
+    if (contentType.includes('application/json')) {
+      if (!isBlobStorageEnabled()) {
+        return NextResponse.json(
+          {
+            error:
+              'Stockage Blob non configuré. Ajoutez BLOB_READ_WRITE_TOKEN (Storage → Blob sur Vercel).',
+          },
+          { status: 503 },
+        )
+      }
+      return await handleBlobClientUpload(request)
     }
 
-    if (kind !== 'image' && kind !== 'video') {
-      return NextResponse.json({ error: 'Type de média invalide.' }, { status: 400 })
-    }
-
-    const result = await saveUploadedFile(file, kind)
-    return NextResponse.json({ success: true, url: result.url, filename: result.filename })
+    return await handleLocalFormUpload(request)
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Erreur lors de l’upload.'
-    return NextResponse.json({ error: message }, { status: 400 })
+    const message =
+      error instanceof Error ? error.message : 'Erreur lors de l’upload.'
+    const status = message === 'Authentification requise' ? 401 : 400
+    return NextResponse.json({ error: message }, { status })
   }
 }

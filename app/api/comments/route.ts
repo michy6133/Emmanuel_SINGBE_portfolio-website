@@ -45,7 +45,9 @@ export async function POST(request: Request) {
         'Merci ! Votre commentaire a été envoyé et sera visible après validation.',
       id: comment.id,
     })
-  } catch {
-    return NextResponse.json({ error: 'Erreur serveur.' }, { status: 500 })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Erreur serveur.'
+    const status = message.includes('Stockage indisponible') ? 503 : 500
+    return NextResponse.json({ error: message }, { status })
   }
 }

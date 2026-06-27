@@ -24,7 +24,9 @@ export async function PUT(request: Request) {
     await saveSiteContent(body)
     revalidatePath('/', 'layout')
     return NextResponse.json({ success: true })
-  } catch {
-    return NextResponse.json({ error: 'Données invalides' }, { status: 400 })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Données invalides'
+    const status = message.includes('Stockage indisponible') ? 503 : 400
+    return NextResponse.json({ error: message }, { status })
   }
 }
