@@ -4,7 +4,9 @@ export const CONTENT_BLOB_PATH = 'portfolio/site-content.json'
 export const COMMENTS_BLOB_PATH = 'portfolio/comments.json'
 
 export function isBlobStorageEnabled(): boolean {
-  return Boolean(process.env.BLOB_READ_WRITE_TOKEN)
+  // Supporte les deux modes : token legacy (BLOB_READ_WRITE_TOKEN)
+  // et OIDC moderne (BLOB_STORE_ID seul, sans token manuel)
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID)
 }
 
 export async function readJsonBlob<T>(
@@ -45,7 +47,7 @@ export async function writeJsonBlob(
 export function assertBlobStorageAvailable(): void {
   if (process.env.VERCEL && !isBlobStorageEnabled()) {
     throw new Error(
-      'Stockage indisponible sur Vercel. Créez un Blob Store (Storage → Blob) et redéployez.',
+      'Stockage indisponible sur Vercel. Créez un Blob Store (Storage → Blob) et liez-le au projet.',
     )
   }
 }
