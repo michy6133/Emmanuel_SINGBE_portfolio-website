@@ -74,28 +74,4 @@ export function verifySessionToken(token: string | null | undefined): boolean {
   return verifyToken(token)
 }
 
-export function createUploadToken(): string {
-  const exp = Date.now() + 5 * 60 * 1000 // 5 minutes
-  const payload = Buffer.from(JSON.stringify({ exp, type: 'upload' })).toString('base64url')
-  return `${payload}.${sign(payload)}`
-}
-
-export function verifyUploadToken(token: string | null | undefined): boolean {
-  if (!token) return false
-  const [payload, signature] = token.split('.')
-  if (!payload || !signature) return false
-
-  const expected = sign(payload)
-  const sigBuf = Buffer.from(signature)
-  const expBuf = Buffer.from(expected)
-  if (sigBuf.length !== expBuf.length || !timingSafeEqual(sigBuf, expBuf)) return false
-
-  try {
-    const data = JSON.parse(Buffer.from(payload, 'base64url').toString()) as { exp: number; type: string }
-    return data.type === 'upload' && typeof data.exp === 'number' && data.exp > Date.now()
-  } catch {
-    return false
-  }
-}
-
 export { SESSION_COOKIE }

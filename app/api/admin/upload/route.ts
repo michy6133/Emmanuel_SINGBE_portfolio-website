@@ -1,6 +1,6 @@
 import { handleUpload, type HandleUploadBody } from '@vercel/blob/client'
 import { NextResponse } from 'next/server'
-import { isAdminAuthenticated, createUploadToken, verifyUploadToken } from '@/lib/server/auth'
+import { isAdminAuthenticated } from '@/lib/server/auth'
 import { isBlobStorageEnabled } from '@/lib/server/blob-storage'
 import { requireAdmin } from '@/lib/server/guard'
 import {
@@ -24,27 +24,14 @@ function parseUploadKind(clientPayload: string | null | undefined): UploadKind {
   }
 }
 
-async function isUploadAuthorized(request: Request): Promise<boolean> {
-  const ok = await isAdminAuthenticated()
-  if (ok) return true
-
-  const url = new URL(request.url)
-  const token = url.searchParams.get('token') || request.headers.get('x-upload-token')
-  if (token) {
-    return verifyUploadToken(token)
-  }
-  return false
-}
-
 async function handleBlobClientUpload(request: Request) {
   const body = (await request.json()) as HandleUploadBody
 
   const jsonResponse = await handleUpload({
     body,
     request,
-
     onBeforeGenerateToken: async (_pathname, clientPayload) => {
-      const ok = await isUploadAuthorized(request)
+      const ok = await isAdminAuthenticated()
       if (!ok) {
         throw new Error('Authentification requise')
       }
@@ -53,29 +40,11 @@ async function handleBlobClientUpload(request: Request) {
 
       return {
         allowedContentTypes:
-          kind === 'image'
-            ? [...IMAGE_MIME_TYPES]
-            : [...VIDEO_MIME_TYPES],
-        maximumSizeInBytes:
-          kind === 'image' ? MAX_IMAGE_BYTES : MAX_VIDEO_BYTES,
+          kind === 'image' ? [...IMAGE_MIME_TYPES] : [...VIDEO_MIME_TYPES],
+        maximumSizeInBytes: kind === 'image' ? MAX_IMAGE_BYTES : MAX_VIDEO_BYTES,
         addRandomSuffix: true,
         tokenPayload: JSON.stringify({ kind }),
       }
-    },
-
-    onUploadCompleted: async ({ blob, tokenPayload }) => {
-      // Optionnel : logs ou persistance en base
-      const parsed = tokenPayload ? JSON.parse(tokenPayload) : null
-
-      console.log('Upload terminé:', {
-        blob,
-        kind: parsed?.kind,
-      })
-
-      // Ici tu peux ajouter :
-      // - insertion DB
-      // - update utilisateur
-      // - notification
     },
   })
 
@@ -110,23 +79,14 @@ async function handleLocalFormUpload(request: Request) {
 }
 
 export async function GET() {
-  const ok = await isAdminAuthenticated()
-  if (!ok) {
-    return NextResponse.json({ error: 'Authentification requise' }, { status: 401 })
-  }
-
-  const token = createUploadToken()
   return NextResponse.json({
     mode: isBlobStorageEnabled() || process.env.VERCEL ? 'blob' : 'local',
-    token,
   })
 }
 
 export async function POST(request: Request) {
-  const authorized = await isUploadAuthorized(request)
-  if (!authorized) {
-    return NextResponse.json({ error: 'Authentification requise' }, { status: 401 })
-  }
+  const denied = await requireAdmin()
+  if (denied) return denied
 
   const contentType = request.headers.get('content-type') ?? ''
 
@@ -146,7 +106,6 @@ export async function POST(request: Request) {
 
     return await handleLocalFormUpload(request)
   } catch (error) {
-    console.error('Error in POST /api/admin/upload:', error)
     const message =
       error instanceof Error ? error.message : 'Erreur lors de l’upload.'
     const status = message === 'Authentification requise' ? 401 : 400

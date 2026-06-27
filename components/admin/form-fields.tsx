@@ -109,18 +109,14 @@ export function SelectField({
 
 async function uploadMedia(file: File, kind: 'image' | 'video'): Promise<string> {
   const configRes = await fetch('/api/admin/upload', { credentials: 'same-origin' })
-  if (!configRes.ok) {
-    const errData = await configRes.json().catch(() => ({}))
-    throw new Error(errData.error || `Erreur d’authentification (status ${configRes.status}).`)
-  }
-  const config = (await configRes.json()) as { mode?: 'blob' | 'local'; token?: string }
+  const config = (await configRes.json()) as { mode?: 'blob' | 'local' }
 
   if (config.mode === 'blob') {
     const { upload } = await import('@vercel/blob/client')
     const pathname = `uploads/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]+/g, '-')}`
     const blob = await upload(pathname, file, {
       access: 'public',
-      handleUploadUrl: `/api/admin/upload?token=${config.token || ''}`,
+      handleUploadUrl: '/api/admin/upload',
       clientPayload: JSON.stringify({ kind }),
     })
     return blob.url
@@ -130,7 +126,7 @@ async function uploadMedia(file: File, kind: 'image' | 'video'): Promise<string>
   formData.append('file', file)
   formData.append('kind', kind)
 
-  const res = await fetch(`/api/admin/upload?token=${config.token || ''}`, {
+  const res = await fetch('/api/admin/upload', {
     method: 'POST',
     credentials: 'same-origin',
     body: formData,

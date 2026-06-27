@@ -4,50 +4,33 @@ export const CONTENT_BLOB_PATH = 'portfolio/site-content.json'
 export const COMMENTS_BLOB_PATH = 'portfolio/comments.json'
 
 export function isBlobStorageEnabled(): boolean {
-  // Supporte les deux modes : token legacy (BLOB_READ_WRITE_TOKEN)
-  // et OIDC moderne (BLOB_STORE_ID seul, sans token manuel)
-  return Boolean(process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID)
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN)
 }
 
-export async function readJsonBlob<T>(
-  pathname: string,
-  fallback: T,
-): Promise<T> {
+export async function readJsonBlob<T>(pathname: string, fallback: T): Promise<T> {
   try {
     const meta = await head(pathname)
-
-    const res = await fetch(meta.url, {
-      cache: 'no-store',
-    })
-
+    const res = await fetch(meta.url, { cache: 'no-store' })
     if (!res.ok) return fallback
-
     return (await res.json()) as T
   } catch {
     return fallback
   }
 }
 
-export async function writeJsonBlob(
-  pathname: string,
-  data: unknown,
-): Promise<void> {
+export async function writeJsonBlob(pathname: string, data: unknown): Promise<void> {
   await put(pathname, JSON.stringify(data, null, 2), {
     access: 'public',
     contentType: 'application/json',
-
-    // IMPORTANT :
-    // allowOverwrite n'existe plus dans @vercel/blob actuel
-    // Le comportement d'écrasement dépend du path + addRandomSuffix
-
     addRandomSuffix: false,
+    allowOverwrite: true,
   })
 }
 
 export function assertBlobStorageAvailable(): void {
   if (process.env.VERCEL && !isBlobStorageEnabled()) {
     throw new Error(
-      'Stockage indisponible sur Vercel. Créez un Blob Store (Storage → Blob) et liez-le au projet.',
+      'Stockage indisponible sur Vercel. Créez un Blob Store (Storage → Blob) et redéployez.',
     )
   }
 }
