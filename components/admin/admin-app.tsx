@@ -42,6 +42,7 @@ import {
 } from '@/components/admin/form-fields'
 import type { Comment, Project, SiteContent, Testimonial } from '@/lib/types'
 import { DEFAULT_CONTENT } from '@/lib/default-content'
+import { adminFetch } from '@/lib/admin-fetch'
 import { cn } from '@/lib/utils'
 
 type AdminTab =
@@ -83,7 +84,7 @@ export function AdminApp() {
   const [message, setMessage] = useState('')
 
   const checkSession = useCallback(async () => {
-    const res = await fetch('/api/admin/session')
+    const res = await adminFetch('/api/admin/session')
     const data = await res.json()
     setAuthenticated(data.authenticated)
     return data.authenticated as boolean
@@ -91,9 +92,15 @@ export function AdminApp() {
 
   const loadData = useCallback(async () => {
     const [contentRes, commentsRes] = await Promise.all([
-      fetch('/api/admin/content'),
-      fetch('/api/admin/comments'),
+      adminFetch('/api/admin/content'),
+      adminFetch('/api/admin/comments'),
     ])
+
+    if (contentRes.status === 401 || commentsRes.status === 401) {
+      setAuthenticated(false)
+      return
+    }
+
     if (contentRes.ok) setContent(await contentRes.json())
     if (commentsRes.ok) setComments(await commentsRes.json())
   }, [])
@@ -105,7 +112,7 @@ export function AdminApp() {
   }, [checkSession, loadData])
 
   const handleLogout = async () => {
-    await fetch('/api/admin/auth', { method: 'DELETE' })
+    await adminFetch('/api/admin/auth', { method: 'DELETE' })
     setAuthenticated(false)
     setContent(null)
     setComments([])
@@ -115,17 +122,22 @@ export function AdminApp() {
     if (!content) return
     setSaving(true)
     setMessage('')
-    const res = await fetch('/api/admin/content', {
+    const res = await adminFetch('/api/admin/content', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(content),
     })
     setSaving(false)
-    setMessage(res.ok ? 'Contenu enregistré.' : 'Erreur lors de la sauvegarde.')
+    if (res.ok) {
+      setMessage('Contenu enregistré — visible sur le site.')
+    } else {
+      const data = await res.json().catch(() => ({}))
+      setMessage(data.error || 'Erreur lors de la sauvegarde.')
+    }
   }
 
   const updateCommentStatus = async (id: string, status: Comment['status']) => {
-    const res = await fetch('/api/admin/comments', {
+    const res = await adminFetch('/api/admin/comments', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, status }),
@@ -134,7 +146,7 @@ export function AdminApp() {
   }
 
   const removeComment = async (id: string) => {
-    const res = await fetch(`/api/admin/comments?id=${id}`, { method: 'DELETE' })
+    const res = await adminFetch(`/api/admin/comments?id=${id}`, { method: 'DELETE' })
     if (res.ok) loadData()
   }
 
@@ -485,6 +497,7 @@ export function AdminApp() {
                           label="Images"
                           values={project.gallery}
                           onChange={(gallery) => { const projects = [...content.projects]; projects[i] = { ...project, gallery }; setContent({ ...content, projects }) }}
+                          uploadImages
                         />
                       </FormGroup>
                     </ItemCard>

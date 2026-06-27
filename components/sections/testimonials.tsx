@@ -18,12 +18,13 @@ type DisplayItem = {
 
 type TestimonialsProps = {
   testimonials: Testimonial[]
+  approvedComments?: Comment[]
 }
 
-export function Testimonials({ testimonials }: TestimonialsProps) {
+export function Testimonials({ testimonials, approvedComments = [] }: TestimonialsProps) {
   const [index, setIndex] = useState(0)
   const [dir, setDir] = useState(1)
-  const [approvedComments, setApprovedComments] = useState<Comment[]>([])
+  const [liveComments, setLiveComments] = useState<Comment[]>(approvedComments)
   const [submitting, setSubmitting] = useState(false)
   const [submitMessage, setSubmitMessage] = useState('')
   const [submitError, setSubmitError] = useState('')
@@ -31,7 +32,9 @@ export function Testimonials({ testimonials }: TestimonialsProps) {
   useEffect(() => {
     fetch('/api/comments')
       .then((res) => res.json())
-      .then((data) => setApprovedComments(data))
+      .then((data) => {
+        if (Array.isArray(data)) setLiveComments(data)
+      })
       .catch(() => {})
   }, [])
 
@@ -44,7 +47,7 @@ export function Testimonials({ testimonials }: TestimonialsProps) {
       photo: t.photo,
       text: t.text,
     })),
-    ...approvedComments.map((c) => ({
+    ...liveComments.map((c) => ({
       id: c.id,
       name: `${c.firstName} ${c.lastName.charAt(0)}.`,
       role: c.role || 'Client',
@@ -92,6 +95,7 @@ export function Testimonials({ testimonials }: TestimonialsProps) {
 
       setSubmitMessage(data.message)
       form.reset()
+      // Rafraîchir les commentaires après soumission (reste en attente)
     } catch {
       setSubmitError('Erreur réseau. Veuillez réessayer.')
     } finally {

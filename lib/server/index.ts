@@ -20,3 +20,5 @@ export {
 } from './auth'
 
 export { requireAdmin } from './guard'
+
+export { saveUploadedFile, type UploadKind } from './upload'

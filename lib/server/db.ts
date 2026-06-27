@@ -3,6 +3,7 @@ import fsSync from 'fs'
 import path from 'path'
 import { DEFAULT_CONTENT } from '@/lib/default-content'
 import type { Comment, SiteContent } from '@/lib/types'
+import { mergeSiteContent } from './content-utils'
 
 const DATA_DIR = path.join(process.cwd(), 'data')
 const CONTENT_FILE = path.join(DATA_DIR, 'site-content.json')
@@ -12,17 +13,26 @@ async function ensureDataDir() {
   await fs.mkdir(DATA_DIR, { recursive: true })
 }
 
+function initStoreSync() {
+  fsSync.mkdirSync(DATA_DIR, { recursive: true })
+  if (!fsSync.existsSync(COMMENTS_FILE)) {
+    fsSync.writeFileSync(COMMENTS_FILE, '[]', 'utf-8')
+  }
+}
+
 export async function getSiteContent(): Promise<SiteContent> {
+  initStoreSync()
   try {
     const raw = await fs.readFile(CONTENT_FILE, 'utf-8')
     const stored = JSON.parse(raw) as Partial<SiteContent>
-    return { ...DEFAULT_CONTENT, ...stored }
+    return mergeSiteContent(stored)
   } catch {
     return DEFAULT_CONTENT
   }
 }
 
 export async function saveSiteContent(content: SiteContent): Promise<void> {
+  initStoreSync()
   await ensureDataDir()
   await fs.writeFile(CONTENT_FILE, JSON.stringify(content, null, 2), 'utf-8')
 }
@@ -58,6 +68,7 @@ export async function getAllComments(): Promise<Comment[]> {
 export async function addComment(
   data: Omit<Comment, 'id' | 'status' | 'createdAt'>,
 ): Promise<Comment> {
+  initStoreSync()
   const comments = await readComments()
   const comment: Comment = {
     ...data,
@@ -90,10 +101,7 @@ export async function deleteComment(id: string): Promise<boolean> {
   return true
 }
 
-/** Vérifie que le dossier data est accessible en écriture au démarrage */
+/** @deprecated Utiliser initStoreSync interne */
 export function assertDataStoreReady(): void {
-  fsSync.mkdirSync(DATA_DIR, { recursive: true })
-  if (!fsSync.existsSync(COMMENTS_FILE)) {
-    fsSync.writeFileSync(COMMENTS_FILE, '[]', 'utf-8')
-  }
+  initStoreSync()
 }

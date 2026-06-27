@@ -11,10 +11,15 @@ import { Certifications } from '@/components/sections/certifications'
 import { Testimonials } from '@/components/sections/testimonials'
 import { Contact } from '@/components/sections/contact'
 import { GsapScrollEffects } from '@/components/gsap-scroll-effects'
-import { getSiteContent } from '@/lib/server/db'
+import { getApprovedComments, getSiteContent } from '@/lib/server/db'
+
+export const dynamic = 'force-dynamic'
 
 export default async function Page() {
-  const content = await getSiteContent()
+  const [content, approvedComments] = await Promise.all([
+    getSiteContent(),
+    getApprovedComments(),
+  ])
 
   return (
     <div className="grain min-h-screen bg-background">
@@ -29,7 +34,10 @@ export default async function Page() {
         <Portfolio projects={content.projects} />
         <Services services={content.services} />
         <Certifications certifications={content.certifications} />
-        <Testimonials testimonials={content.testimonials} />
+        <Testimonials
+          testimonials={content.testimonials}
+          approvedComments={approvedComments}
+        />
         <Contact contact={content.contact} />
       </main>
       <Footer />

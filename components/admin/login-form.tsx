@@ -15,6 +15,7 @@ export function AdminLogin({ onSuccess }: { onSuccess: () => void }) {
 
     const res = await fetch('/api/admin/auth', {
       method: 'POST',
+      credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ password }),
     })

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { deleteComment, getAllComments, updateCommentStatus } from '@/lib/server/db'
 import { requireAdmin } from '@/lib/server/guard'
 import type { CommentStatus } from '@/lib/types'
@@ -26,6 +27,7 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'Commentaire introuvable' }, { status: 404 })
     }
 
+    revalidatePath('/', 'layout')
     return NextResponse.json(updated)
   } catch {
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
@@ -47,5 +49,6 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'Commentaire introuvable' }, { status: 404 })
   }
 
+  revalidatePath('/', 'layout')
   return NextResponse.json({ success: true })
 }
