@@ -27,28 +27,26 @@ function parseUploadKind(clientPayload: string | null | undefined): UploadKind {
 async function handleBlobClientUpload(request: Request) {
   const body = (await request.json()) as HandleUploadBody
 
-  const jsonResponse = await handleUpload({
+  await handleUpload({
     body,
     request,
-    onBeforeGenerateToken: async (_pathname, clientPayload) => {
+    onBeforeGenerateToken: async (_pathname, _clientPayload, _multipart) => {
       const ok = await isAdminAuthenticated()
       if (!ok) {
         throw new Error('Authentification requise')
       }
-
-      const kind = parseUploadKind(clientPayload)
-
       return {
-        allowedContentTypes:
-          kind === 'image' ? [...IMAGE_MIME_TYPES] : [...VIDEO_MIME_TYPES],
-        maximumSizeInBytes: kind === 'image' ? MAX_IMAGE_BYTES : MAX_VIDEO_BYTES,
+        allowedContentTypes: ['image/*', 'video/*'],
+        maximumSizeInBytes: 1024 * 1024 * 10, // 10MB
         addRandomSuffix: true,
-        tokenPayload: JSON.stringify({ kind }),
+        cacheControlMaxAge: 60 * 60 * 24 * 30, // 30 jours
+        validUntil: Date.now() + 60 * 60 * 24 * 30, // 30 jours
       }
     },
+    onUploadCompleted: async () => {
+      console.log('upload completed')
+    },
   })
-
-  return NextResponse.json(jsonResponse)
 }
 
 async function handleLocalFormUpload(request: Request) {

@@ -19,12 +19,14 @@ export async function readJsonBlob<T>(pathname: string, fallback: T): Promise<T>
 }
 
 export async function writeJsonBlob(pathname: string, data: unknown): Promise<void> {
-  await put(pathname, JSON.stringify(data, null, 2), {
-    access: 'public',
+  const options = {
+    access: 'public' as const,
     contentType: 'application/json',
     addRandomSuffix: false,
-    allowOverwrite: true,
-  })
+    cacheControlMaxAge: 60 * 60 * 24 * 30, // 30 jours
+    validUntil: Date.now() + 60 * 60 * 24 * 30, // 30 jours
+  }
+  await put(pathname, JSON.stringify(data, null, 2), options)
 }
 
 export function assertBlobStorageAvailable(): void {
