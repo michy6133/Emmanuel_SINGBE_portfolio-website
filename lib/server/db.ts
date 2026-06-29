@@ -1,7 +1,6 @@
 import { promises as fs } from 'fs'
 import fsSync from 'fs'
 import path from 'path'
-import { DEFAULT_CONTENT } from '@/lib/default-content'
 import type { Comment, SiteContent } from '@/lib/types'
 import {
   COMMENTS_BLOB_PATH,
@@ -17,7 +16,7 @@ const DATA_DIR = path.join(process.cwd(), 'data')
 const CONTENT_FILE = path.join(DATA_DIR, 'site-content.json')
 const COMMENTS_FILE = path.join(DATA_DIR, 'comments.json')
 
-function useLocalFilesystem(): boolean {
+function shouldUseLocalFilesystem(): boolean {
   return !isBlobStorageEnabled() && !process.env.VERCEL
 }
 
@@ -26,7 +25,7 @@ async function ensureDataDir() {
 }
 
 function initLocalStoreSync() {
-  if (!useLocalFilesystem()) return
+  if (!shouldUseLocalFilesystem()) return
   fsSync.mkdirSync(DATA_DIR, { recursive: true })
   if (!fsSync.existsSync(COMMENTS_FILE)) {
     fsSync.writeFileSync(COMMENTS_FILE, '[]', 'utf-8')

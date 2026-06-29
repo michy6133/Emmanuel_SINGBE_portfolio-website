@@ -4,8 +4,12 @@ import { isAdminAuthenticated } from '@/lib/server/auth'
 import { isBlobStorageEnabled } from '@/lib/server/blob-storage'
 import { requireAdmin } from '@/lib/server/guard'
 import {
+  IMAGE_MIME_TYPES,
+  MAX_IMAGE_BYTES,
+  MAX_VIDEO_BYTES,
   saveUploadedFile,
   type UploadKind,
+  VIDEO_MIME_TYPES,
 } from '@/lib/server/upload'
 
 export const maxDuration = 60
@@ -16,14 +20,26 @@ async function handleBlobClientUpload(request: Request): Promise<NextResponse> {
   const jsonResponse = await handleUpload({
     body,
     request,
-    onBeforeGenerateToken: async (_pathname, _clientPayload, _multipart) => {
+    onBeforeGenerateToken: async (_pathname, clientPayload) => {
       const ok = await isAdminAuthenticated()
       if (!ok) {
         throw new Error('Authentification requise')
       }
+
+      let kind: UploadKind = 'image'
+      if (clientPayload) {
+        try {
+          const payload = JSON.parse(clientPayload) as { kind?: UploadKind }
+          if (payload.kind === 'video') kind = 'video'
+        } catch {
+          throw new Error('Données upload invalides.')
+        }
+      }
+
       return {
-        allowedContentTypes: ['image/*', 'video/*'],
-        maximumSizeInBytes: 1024 * 1024 * 10, // 10MB
+        allowedContentTypes:
+          kind === 'video' ? [...VIDEO_MIME_TYPES] : [...IMAGE_MIME_TYPES],
+        maximumSizeInBytes: kind === 'video' ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES,
         addRandomSuffix: true,
         cacheControlMaxAge: 60 * 60 * 24 * 30, // 30 jours
         validUntil: Date.now() + 60 * 60 * 24 * 30, // 30 jours
@@ -65,8 +81,22 @@ async function handleLocalFormUpload(request: Request): Promise<NextResponse> {
 }
 
 export async function GET() {
+  if (isBlobStorageEnabled()) {
+    return NextResponse.json({ mode: 'blob', available: true })
+  }
+
+  if (process.env.VERCEL) {
+    return NextResponse.json({
+      mode: 'unavailable',
+      available: false,
+      error:
+        'Stockage Blob non configuré. Ajoutez BLOB_READ_WRITE_TOKEN via Storage → Blob dans Vercel puis redéployez.',
+    })
+  }
+
   return NextResponse.json({
-    mode: isBlobStorageEnabled() || process.env.VERCEL ? 'blob' : 'local',
+    mode: 'local',
+    available: true,
   })
 }
 

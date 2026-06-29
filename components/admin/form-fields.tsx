@@ -109,17 +109,35 @@ export function SelectField({
 
 async function uploadMedia(file: File, kind: 'image' | 'video'): Promise<string> {
   const configRes = await fetch('/api/admin/upload', { credentials: 'same-origin' })
-  const config = (await configRes.json()) as { mode?: 'blob' | 'local' }
+  const config = (await configRes.json()) as {
+    mode?: 'blob' | 'local' | 'unavailable'
+    available?: boolean
+    error?: string
+  }
+
+  if (!configRes.ok || config.available === false || config.mode === 'unavailable') {
+    throw new Error(config.error || 'Upload indisponible.')
+  }
 
   if (config.mode === 'blob') {
     const { upload } = await import('@vercel/blob/client')
     const pathname = `uploads/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]+/g, '-')}`
-    const blob = await upload(pathname, file, {
-      access: 'public',
-      handleUploadUrl: '/api/admin/upload',
-      clientPayload: JSON.stringify({ kind }),
-    })
-    return blob.url
+    try {
+      const blob = await upload(pathname, file, {
+        access: 'public',
+        handleUploadUrl: '/api/admin/upload',
+        clientPayload: JSON.stringify({ kind }),
+        contentType: file.type || undefined,
+        multipart: kind === 'video',
+      })
+      return blob.url
+    } catch (err) {
+      throw new Error(
+        err instanceof Error
+          ? err.message
+          : "Échec de l'upload vers Vercel Blob.",
+      )
+    }
   }
 
   const formData = new FormData()
@@ -151,7 +169,6 @@ function UploadButton({
   onClick: () => void
   label?: string
 }) {
-  const Icon = kind === 'video' ? Film : ImageIcon
   return (
     <button
       type="button"

@@ -106,6 +106,7 @@ export function AdminApp() {
   }, [])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Session state is updated after an async request.
     checkSession().then((ok) => {
       if (ok) loadData()
     })
