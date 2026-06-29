@@ -1,6 +1,7 @@
 import { promises as fs } from 'fs'
 import path from 'path'
 import { randomBytes } from 'crypto'
+import { put } from '@vercel/blob'
 
 const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads')
 
@@ -91,6 +92,14 @@ export function validateUploadFile(file: File, kind: UploadKind): string {
   return ''
 }
 
+function buildUploadedFilename(file: File, kind: UploadKind, mime: string): string {
+  const ext =
+    EXT_BY_MIME[mime] ??
+    (path.extname(file.name) || (kind === 'image' ? '.jpg' : '.mp4'))
+  const base = sanitizeBaseName(file.name) || kind
+  return `${Date.now()}-${randomBytes(4).toString('hex')}-${base}${ext}`
+}
+
 export async function saveUploadedFile(
   file: File,
   kind: UploadKind,
@@ -104,15 +113,32 @@ export async function saveUploadedFile(
 
   await fs.mkdir(UPLOAD_DIR, { recursive: true })
 
-  const ext =
-    EXT_BY_MIME[mime] ??
-    (path.extname(file.name) || (kind === 'image' ? '.jpg' : '.mp4'))
-  const base = sanitizeBaseName(file.name) || kind
-  const filename = `${Date.now()}-${randomBytes(4).toString('hex')}-${base}${ext}`
+  const filename = buildUploadedFilename(file, kind, mime)
   const filepath = path.join(UPLOAD_DIR, filename)
 
   const buffer = Buffer.from(await file.arrayBuffer())
   await fs.writeFile(filepath, buffer)
 
   return { url: `/uploads/${filename}`, filename }
+}
+
+export async function saveUploadedBlob(
+  file: File,
+  kind: UploadKind,
+): Promise<{ url: string; filename: string }> {
+  const validationError = validateUploadFile(file, kind)
+  if (validationError) {
+    throw new Error(validationError)
+  }
+
+  const mime = resolveMimeType(file)
+  const filename = buildUploadedFilename(file, kind, mime)
+  const blob = await put(`uploads/${filename}`, file, {
+    access: 'public',
+    contentType: mime,
+    addRandomSuffix: false,
+    cacheControlMaxAge: 60 * 60 * 24 * 30,
+  })
+
+  return { url: blob.url, filename }
 }

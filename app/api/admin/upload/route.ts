@@ -7,6 +7,7 @@ import {
   IMAGE_MIME_TYPES,
   MAX_IMAGE_BYTES,
   MAX_VIDEO_BYTES,
+  saveUploadedBlob,
   saveUploadedFile,
   type UploadKind,
   VIDEO_MIME_TYPES,
@@ -76,7 +77,9 @@ async function handleLocalFormUpload(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: 'Type de média invalide.' }, { status: 400 })
   }
 
-  const result = await saveUploadedFile(file, kind)
+  const result = isBlobStorageEnabled()
+    ? await saveUploadedBlob(file, kind)
+    : await saveUploadedFile(file, kind)
   return NextResponse.json({ success: true, url: result.url, filename: result.filename })
 }
 
